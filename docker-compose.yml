@@ -1,0 +1,49 @@
+﻿services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongo:27017/ioc-analyzer
+      - VT_API_KEY=${VT_API_KEY:-your-api-key}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-change-me}
+    depends_on:
+      - mongo
+    networks:
+      - ioc-network
+
+  mongo:
+    image: mongo:7
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=ioc-analyzer
+    volumes:
+      - mongo-data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - ioc-network
+
+  mongo-express:
+    image: mongo-express:latest
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongo
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin123
+    depends_on:
+      - mongo
+    networks:
+      - ioc-network
+
+volumes:
+  mongo-data:
+
+networks:
+  ioc-network:
+    driver: bridge
