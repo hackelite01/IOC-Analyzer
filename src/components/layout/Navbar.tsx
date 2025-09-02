@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Shield, Search, History, FileText } from 'lucide-react';
+import { Shield, Search, History, FileText, Network } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: Shield },
   { href: '/analyze', label: 'Analyze', icon: Search },
+  { href: '/graph', label: 'Graph', icon: Network },
   { href: '/history', label: 'History', icon: History },
 ];
 
