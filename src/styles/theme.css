@@ -1,0 +1,189 @@
+/* Base theme styles and component defaults */
+
+/* Scrollbar styling for dark theme */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--muted)) rgb(var(--bg));
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgb(var(--bg));
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--muted));
+  border-radius: var(--radius-md);
+  border: none;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--muted-foreground));
+}
+
+/* Focus ring styles */
+.focus-ring {
+  outline: 2px solid rgb(59 130 246);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgb(59 130 246 / 0.5);
+}
+
+/* Animation utilities */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Gradient backgrounds */
+.gradient-primary {
+  background: var(--gradient-primary);
+}
+
+.gradient-card {
+  background: var(--gradient-card);
+}
+
+/* Glass morphism effect */
+.glass {
+  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Hover effects */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Status indicators */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-online {
+  background-color: rgb(34 197 94);
+  box-shadow: 0 0 6px rgb(34 197 94);
+}
+
+.status-warning {
+  background-color: rgb(245 158 11);
+  box-shadow: 0 0 6px rgb(245 158 11);
+}
+
+.status-error {
+  background-color: rgb(239 68 68);
+  box-shadow: 0 0 6px rgb(239 68 68);
+}
+
+/* Custom badge styles */
+.badge-threat-high {
+  background-color: rgb(239 68 68 / 0.1);
+  color: rgb(248 113 113);
+  border: 1px solid rgb(239 68 68 / 0.2);
+}
+
+.badge-threat-medium {
+  background-color: rgb(245 158 11 / 0.1);
+  color: rgb(251 191 36);
+  border: 1px solid rgb(245 158 11 / 0.2);
+}
+
+.badge-threat-low {
+  background-color: rgb(34 197 94 / 0.1);
+  color: rgb(74 222 128);
+  border: 1px solid rgb(34 197 94 / 0.2);
+}
+
+.badge-threat-critical {
+  background-color: rgb(168 85 247 / 0.1);
+  color: rgb(196 181 253);
+  border: 1px solid rgb(168 85 247 / 0.2);
+}
+
+/* Loading skeleton */
+@keyframes skeleton {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, 
+    rgb(var(--muted) / 0.1) 0%, 
+    rgb(var(--muted) / 0.2) 50%, 
+    rgb(var(--muted) / 0.1) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton 1.5s ease-in-out infinite;
+}
+
+/* Chart container styling */
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.chart-container canvas {
+  max-width: 100%;
+  height: auto !important;
+}
+
+/* Responsive breakpoints utility classes */
+@media (max-width: 640px) {
+  .mobile-hidden { display: none; }
+}
+
+@media (min-width: 641px) and (max-width: 768px) {
+  .tablet-hidden { display: none; }
+}
+
+@media (min-width: 769px) {
+  .desktop-only { display: block; }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .animate-fade-in,
+  .animate-slide-in {
+    animation: none;
+  }
+}

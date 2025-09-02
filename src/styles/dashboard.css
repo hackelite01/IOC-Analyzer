@@ -1,0 +1,125 @@
+/* Dark Theme Design System - IOC Analyzer Dashboard */
+:root {
+  /* Primary Dark Theme Colors */
+  --bg-primary: 20, 20, 32;          /* Deep navy background */
+  --bg-secondary: 28, 30, 48;        /* Card backgrounds */
+  --bg-accent: 35, 39, 64;           /* Sidebar background */
+  
+  /* Text Colors */
+  --text-primary: 255, 255, 255;     /* Primary white text */
+  --text-secondary: 156, 163, 175;   /* Muted gray text */
+  --text-muted: 107, 114, 128;       /* Very muted text */
+  
+  /* Brand Colors */
+  --primary-purple: 147, 51, 234;    /* Purple accent */
+  --primary-blue: 59, 130, 246;      /* Blue accent */
+  
+  /* Status Colors */
+  --status-success: 34, 197, 94;     /* Green for success */
+  --status-warning: 245, 158, 11;    /* Orange for warning */
+  --status-error: 239, 68, 68;       /* Red for errors */
+  --status-info: 59, 130, 246;       /* Blue for info */
+  
+  /* Chart Colors */
+  --chart-green: 34, 197, 94;        /* Trend line green */
+  --chart-red: 239, 68, 68;          /* Threat line red */
+  --chart-orange: 249, 115, 22;      /* Orange slice */
+  --chart-yellow: 234, 179, 8;       /* Yellow slice */
+  --chart-blue: 59, 130, 246;        /* Blue slice */
+  --chart-purple: 147, 51, 234;      /* Purple slice */
+  
+  /* Border Colors */
+  --border-primary: 55, 65, 81;      /* Primary borders */
+  --border-secondary: 75, 85, 99;    /* Secondary borders */
+  
+  /* Gradients */
+  --gradient-purple: linear-gradient(135deg, rgb(147, 51, 234) 0%, rgb(79, 70, 229) 100%);
+  --gradient-blue: linear-gradient(135deg, rgb(59, 130, 246) 0%, rgb(37, 99, 235) 100%);
+}
+
+/* Global Dark Theme Overrides */
+body {
+  background-color: rgb(var(--bg-primary));
+  color: rgb(var(--text-primary));
+}
+
+/* Custom Component Styles */
+.dashboard-card {
+  background-color: rgb(var(--bg-secondary));
+  border: 1px solid rgb(var(--border-primary));
+  border-radius: 12px;
+}
+
+.sidebar-nav {
+  background-color: rgb(var(--bg-accent));
+}
+
+.stat-card {
+  background: rgb(var(--bg-secondary));
+  border: 1px solid rgb(var(--border-primary));
+  border-radius: 12px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--gradient-blue);
+}
+
+.threat-card {
+  background: rgb(var(--bg-secondary));
+  border: 1px solid rgb(var(--border-primary));
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.system-status {
+  background: rgb(var(--bg-secondary));
+  border: 1px solid rgb(var(--border-primary));
+  border-radius: 12px;
+  padding: 20px;
+}
+
+/* Status Indicators */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-online {
+  background-color: rgb(var(--status-success));
+  box-shadow: 0 0 8px rgb(var(--status-success) / 0.5);
+}
+
+.status-critical {
+  background-color: rgb(var(--status-error));
+  box-shadow: 0 0 8px rgb(var(--status-error) / 0.5);
+}
+
+/* Chart Container Styles */
+.chart-container {
+  background: rgb(var(--bg-secondary));
+  border: 1px solid rgb(var(--border-primary));
+  border-radius: 12px;
+  padding: 24px;
+}
+
+/* Animation */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
