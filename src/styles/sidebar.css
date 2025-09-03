@@ -1,0 +1,14 @@
+/* Sidebar responsive styles */
+@media (max-width: 768px) {
+  .sidebar-responsive {
+    width: 4rem !important;
+  }
+  
+  .sidebar-responsive .sidebar-label {
+    display: none;
+  }
+  
+  .main-content-responsive {
+    margin-left: 4rem !important;
+  }
+}

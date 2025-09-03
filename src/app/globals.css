@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import '../styles/dashboard.css';
+@import '../styles/sidebar.css';
 
 @custom-variant dark (&:is(.dark *));
 
