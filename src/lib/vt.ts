@@ -83,8 +83,14 @@ class EnhancedVirusTotalClient {
    * Enhanced lookup method using the new orchestrator
    */
   async lookupIOCEnhanced(ioc: string, type: IOCType): Promise<LookupResult> {
+    console.log(`[VT-Client] Enhanced lookup starting for ${ioc} (type: ${type})`);
     const indicatorType = this.mapIOCTypeToIndicatorType(type);
-    return await this.orchestrator.lookupIndicator(ioc, { type: indicatorType });
+    console.log(`[VT-Client] Mapped type ${type} -> ${indicatorType}`);
+    
+    const result = await this.orchestrator.lookupIndicator(ioc, { type: indicatorType });
+    console.log(`[VT-Client] Orchestrator result for ${ioc}:`, result);
+    
+    return result;
   }
 
   /**
@@ -93,7 +99,9 @@ class EnhancedVirusTotalClient {
    */
   async lookupIOC(ioc: string, type: IOCType): Promise<VTResponse> {
     try {
+      console.log(`[VT-Client] Starting lookupIOC for ${ioc} (type: ${type})`);
       const result = await this.lookupIOCEnhanced(ioc, type);
+      console.log(`[VT-Client] Enhanced lookup completed for ${ioc}:`, result);
       
       // Convert to legacy format
       const legacyResponse: VTResponse = {
@@ -116,9 +124,11 @@ class EnhancedVirusTotalClient {
         },
       };
 
+      console.log(`[VT-Client] Legacy response for ${ioc}:`, legacyResponse);
       return legacyResponse;
       
     } catch (error) {
+      console.error(`[VT-Client] Error in lookupIOC for ${ioc}:`, error);
       // Return empty result for errors (maintains legacy behavior)
       return {
         data: {

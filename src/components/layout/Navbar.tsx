@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Shield, Search, History, FileText, Network } from 'lucide-react';
+import { NavbarSearch } from './NavbarSearch';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: Shield },
@@ -49,6 +50,11 @@ export function Navbar() {
           </div>
 
           <div className="flex items-center space-x-4">
+            {/* Navbar Search Component */}
+            <div className="hidden lg:block min-w-0 flex-1 max-w-md">
+              <NavbarSearch className="w-full" />
+            </div>
+            
             <Button variant="outline" size="sm">
               <FileText className="h-4 w-4 mr-2" />
               Docs

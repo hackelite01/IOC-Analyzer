@@ -116,9 +116,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           // Fetch real data from VirusTotal
           let vtData: VTNormalized;
           try {
+            console.log(`🚀 Starting VT lookup for ${normalizedIOC} (type: ${type})`);
             const vtResponse = await vtClient.lookupIOC(normalizedIOC, type);
-            console.log(`✅ VirusTotal response received for ${normalizedIOC}`);
-            const stats = vtResponse.data?.attributes?.last_analysis_stats || {};
+            console.log(`✅ VirusTotal response received for ${normalizedIOC}:`, JSON.stringify(vtResponse, null, 2));
+            
+            const stats = vtResponse.data?.attributes?.last_analysis_stats || {
+              malicious: 0,
+              suspicious: 0,
+              harmless: 0,
+              undetected: 0
+            };
             console.log(`📊 VT Stats for ${normalizedIOC}:`, stats);
             
             vtData = {
@@ -133,14 +140,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               },
               providers: []
             };
+            console.log(`🎯 Final verdict for ${normalizedIOC}: ${vtData.verdict}`);
           } catch (error) {
-            console.error(`VirusTotal API error for ${normalizedIOC}:`, error);
+            console.error(`❌ VirusTotal API error for ${normalizedIOC}:`, error);
+            console.error(`❌ Error type: ${typeof error}, message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            console.error(`❌ Stack trace:`, error instanceof Error ? error.stack : 'No stack trace');
+            
             // Fallback to placeholder data if VirusTotal fails
             vtData = {
               verdict: 'unknown',
               stats: { malicious: 0, suspicious: 0, harmless: 0, undetected: 0 },
               providers: []
             };
+            console.log(`🔄 Using fallback 'unknown' verdict for ${normalizedIOC}`);
           }
 
           iocDoc = new IOC({
@@ -219,19 +231,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const { getDatabase } = await import('@/lib/db');
         const db = await getDatabase();
         
-        await db.collection('analyses').insertOne({
-          requestId: body.requestId,
-          query: `${body.iocs.length} IOCs analyzed`,
-          timestamp: new Date(),
-          totalAnalyzed: results.length,
-          malicious: threatStats.malicious,
-          suspicious: threatStats.suspicious,
-          clean: threatStats.clean,
-          unknown: threatStats.unknown,
+        if (db) {
+          await db.collection('analyses').insertOne({
+            requestId: body.requestId,
+            query: `${body.iocs.length} IOCs analyzed`,
+            timestamp: new Date(),
+            totalAnalyzed: results.length,
+            malicious: threatStats.malicious,
+            suspicious: threatStats.suspicious,
+            clean: threatStats.clean,
+            unknown: threatStats.unknown,
           threatBreakdown,
           searchType: body.searchType || 'auto',
           label: body.label || 'Threat Hunt Analysis'
         });
+        }
       } catch (error) {
         console.error('Error saving analysis results:', error);
         // Don't fail the main request if analysis save fails

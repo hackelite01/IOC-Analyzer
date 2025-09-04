@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -140,6 +141,10 @@ export default function AnalyzePage() {
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
   
+  // Handle URL search parameters from navbar search
+  const searchParams = useSearchParams();
+  const urlQuery = searchParams.get('q');
+  
   const authenticatedFetch = useAuthenticatedFetch();
 
   const form = useForm<FormData>({
@@ -192,6 +197,18 @@ export default function AnalyzePage() {
 
     fetchLatestThreatResults();
   }, [authenticatedFetch]);
+
+  // Handle URL query parameter from navbar search
+  useEffect(() => {
+    if (urlQuery && urlQuery.trim()) {
+      console.log('🔍 URL query detected:', urlQuery);
+      // Set the form value and trigger analysis
+      form.setValue('iocs', urlQuery.trim());
+      // Trigger analysis automatically with REPLACE semantics
+      const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+      onSubmit({ iocs: urlQuery.trim() });
+    }
+  }, [urlQuery, form]);
 
   const onSubmit = async (data: FormData) => {
     console.log('🔍 Analysis started with data:', data);

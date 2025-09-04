@@ -99,13 +99,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
-              <div className="text-sm text-slate-400 bg-slate-700/30 p-3 rounded">
-                <strong>Demo Credentials:</strong><br />
-                Admin: mayank@forensiccybertech.com<br />
-                Password: ForensicCyber2025!
-              </div>
-            </div>
+            
           </CardContent>
         </Card>
       </div>

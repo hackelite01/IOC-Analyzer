@@ -5,6 +5,13 @@ export async function GET(request: NextRequest) {
   try {
     const db = await getDatabase();
     
+    if (!db) {
+      return NextResponse.json({
+        success: false,
+        error: 'Database connection failed'
+      }, { status: 500 });
+    }
+    
     // Get the most recent analysis results
     const latestAnalysis = await db.collection('analyses').findOne(
       {},
