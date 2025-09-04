@@ -582,31 +582,34 @@ export default function AnalyzePage() {
               {iocResultsExpanded && (
                 <div>
                   {activeTab === 'detection' && (
-                {/* Community Score */}
-                <div className="bg-white/10 rounded-lg p-6 text-center">
-                  <div className="text-3xl font-bold text-red-300 mb-2">
-                    {detailedAnalysis.riskScore}/100
-                  </div>
-                  <div className="text-sm text-white/80">Community Score</div>
-                </div>
+                    <div>
+                      {/* Community Score */}
+                      <div className="bg-white/10 rounded-lg p-6 text-center">
+                        <div className="text-3xl font-bold text-red-300 mb-2">
+                          {detailedAnalysis.riskScore}/100
+                        </div>
+                        <div className="text-sm text-white/80">Community Score</div>
+                      </div>
 
-                {/* File Size */}
-                <div className="bg-white/10 rounded-lg p-6 text-center">
-                  <div className="text-3xl font-bold text-blue-300 mb-2">
-                    {detailedAnalysis.fileInfo ? `${(detailedAnalysis.fileInfo.size / 1024 / 1024).toFixed(1)} MB` : '1.38 MB'}
-                  </div>
-                  <div className="text-sm text-white/80">Size</div>
-                </div>
+                      {/* File Size */}
+                      <div className="bg-white/10 rounded-lg p-6 text-center">
+                        <div className="text-3xl font-bold text-blue-300 mb-2">
+                          {detailedAnalysis.fileInfo ? `${(detailedAnalysis.fileInfo.size / 1024 / 1024).toFixed(1)} MB` : '1.38 MB'}
+                        </div>
+                        <div className="text-sm text-white/80">Size</div>
+                      </div>
 
-                {/* Last Analysis */}
-                <div className="bg-white/10 rounded-lg p-6 text-center">
-                  <div className="text-3xl font-bold text-purple-300 mb-2">
-                    30 hours ago
-                  </div>
-                  <div className="text-sm text-white/80">Last Analysis Date</div>
+                      {/* Last Analysis */}
+                      <div className="bg-white/10 rounded-lg p-6 text-center">
+                        <div className="text-3xl font-bold text-purple-300 mb-2">
+                          30 hours ago
+                        </div>
+                        <div className="text-sm text-white/80">Last Analysis Date</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </CardContent>
+              )}
           </Card>
 
           {/* File Analysis Results Section */}

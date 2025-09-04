@@ -1,6 +1,7 @@
-﻿import axios, { AxiosInstance } from 'axios';
+﻿import { VirusTotalClient, LookupResult, IndicatorType } from './vt-orchestrator';
 import { IOCType } from './validators';
 
+// Legacy interface for backward compatibility
 interface VTResponse {
   data: {
     attributes: {
@@ -22,65 +23,158 @@ interface VTResponse {
   };
 }
 
-class VirusTotalClient {
-  private client: AxiosInstance;
+// Enhanced VT client using the new orchestrator
+class EnhancedVirusTotalClient {
+  private orchestrator: VirusTotalClient;
 
   constructor() {
-    this.client = axios.create({
-      baseURL: 'https://www.virustotal.com/api/v3',
-      headers: {
-        'x-apikey': process.env.VT_API_KEY || '',
-        'Content-Type': 'application/json',
-      },
-      timeout: 30000,
-    });
+    // Get API keys from environment variables - support both array and individual formats
+    const apiKeys = this.getApiKeysFromEnv();
+
+    if (apiKeys.length === 0) {
+      throw new Error('At least one VirusTotal API key must be provided. Use VT_API_KEYS (comma-separated) or individual VT_API_KEY variables.');
+    }
+
+    console.log(`[VT-Client] Initialized with ${apiKeys.length} API key(s)`);
+
+    // Initialize orchestrator with 45-minute cache TTL
+    this.orchestrator = new VirusTotalClient(apiKeys, { ttlMs: 45 * 60 * 1000 });
   }
 
+  /**
+   * Parse API keys from environment variables supporting multiple formats
+   */
+  private getApiKeysFromEnv(): string[] {
+    const keys: string[] = [];
+
+    // Method 1: Comma-separated array (preferred)
+    if (process.env.VT_API_KEYS) {
+      const arrayKeys = process.env.VT_API_KEYS
+        .split(',')
+        .map(key => key.trim())
+        .filter(key => key.length > 0);
+      keys.push(...arrayKeys);
+    }
+
+    // Method 2: Individual numbered keys (backward compatibility)
+    const individualKeys = [
+      process.env.VT_API_KEY,
+      process.env.VT_API_KEY_1,
+      process.env.VT_API_KEY_2,
+      process.env.VT_API_KEY_3,
+      process.env.VT_API_KEY_4,
+      process.env.VT_API_KEY_5,
+    ].filter(Boolean) as string[];
+
+    // Add individual keys that aren't already in the array
+    for (const key of individualKeys) {
+      if (!keys.includes(key)) {
+        keys.push(key);
+      }
+    }
+
+    // Remove duplicates and validate
+    const uniqueKeys = [...new Set(keys)].filter(key => key && key.length >= 32);
+
+    return uniqueKeys;
+  }
+
+  /**
+   * Enhanced lookup method using the new orchestrator
+   */
+  async lookupIOCEnhanced(ioc: string, type: IOCType): Promise<LookupResult> {
+    const indicatorType = this.mapIOCTypeToIndicatorType(type);
+    return await this.orchestrator.lookupIndicator(ioc, { type: indicatorType });
+  }
+
+  /**
+   * Legacy lookup method for backward compatibility
+   * Converts new orchestrator results to legacy format
+   */
   async lookupIOC(ioc: string, type: IOCType): Promise<VTResponse> {
     try {
-      let endpoint = '';
+      const result = await this.lookupIOCEnhanced(ioc, type);
       
-      switch (type) {
-        case 'ip':
-          endpoint = `/ip_addresses/${ioc}`;
-          break;
-        case 'domain':
-          endpoint = `/domains/${ioc}`;
-          break;
-        case 'hash':
-          endpoint = `/files/${ioc}`;
-          break;
-        case 'url':
-          const urlId = Buffer.from(ioc).toString('base64').replace(/=/g, '');
-          endpoint = `/urls/${urlId}`;
-          break;
-        default:
-          throw new Error(`Unsupported IOC type: ${type}`);
-      }
+      // Convert to legacy format
+      const legacyResponse: VTResponse = {
+        data: {
+          attributes: {
+            last_analysis_stats: result.summary ? {
+              malicious: result.summary.malicious,
+              suspicious: result.summary.suspicious,
+              undetected: result.summary.undetected,
+              harmless: result.summary.clean,
+            } : {
+              malicious: 0,
+              suspicious: 0,
+              undetected: 0,
+              harmless: 0,
+            },
+          },
+          id: ioc,
+          type: type,
+        },
+      };
 
-      const response = await this.client.get<VTResponse>(endpoint);
-      return response.data;
+      return legacyResponse;
       
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response?.status === 404) {
-        return {
-          data: {
-            attributes: {
-              last_analysis_stats: {
-                malicious: 0,
-                suspicious: 0,
-                undetected: 0,
-                harmless: 0,
-              },
+      // Return empty result for errors (maintains legacy behavior)
+      return {
+        data: {
+          attributes: {
+            last_analysis_stats: {
+              malicious: 0,
+              suspicious: 0,
+              undetected: 0,
+              harmless: 0,
             },
-            id: ioc,
-            type,
           },
-        };
-      }
-      throw error;
+          id: ioc,
+          type,
+        },
+      };
+    }
+  }
+
+  /**
+   * Get orchestrator statistics for monitoring
+   */
+  getStats() {
+    return this.orchestrator.getStats();
+  }
+
+  /**
+   * Clear cache (useful for testing or manual cache invalidation)
+   */
+  clearCache() {
+    return this.orchestrator.clearCache();
+  }
+
+  /**
+   * Manually trigger queue processing
+   */
+  async runQueue() {
+    return await this.orchestrator.runQueue();
+  }
+
+  /**
+   * Maps legacy IOC types to new indicator types
+   */
+  private mapIOCTypeToIndicatorType(iocType: IOCType): IndicatorType {
+    switch (iocType) {
+      case 'ip':
+        return 'ip';
+      case 'domain':
+        return 'domain';
+      case 'hash':
+        return 'hash';
+      case 'url':
+        return 'url';
+      default:
+        throw new Error(`Unsupported IOC type: ${iocType}`);
     }
   }
 }
 
-export const vtClient = new VirusTotalClient();
+export const vtClient = new EnhancedVirusTotalClient();

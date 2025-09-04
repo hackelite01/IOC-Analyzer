@@ -45,3 +45,9 @@ async function connectDB() {
 }
 
 export default connectDB;
+
+// Export getDatabase function for direct MongoDB database access
+export async function getDatabase() {
+  const conn = await connectDB();
+  return conn.connection.db;
+}

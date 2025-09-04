@@ -114,11 +114,32 @@ interface DashboardData {
   }>;
 }
 
+interface ThreatOverviewResult {
+  query: string;
+  timestamp: Date;
+  totalAnalyzed: number;
+  malicious: number;
+  suspicious: number;
+  clean: number;
+  threatBreakdown: Array<{
+    type: string;
+    count: number;
+    color: string;
+  }>;
+  requestId: string;
+}
+
 export default function AnalyzePage() {
   const [activeSearchType, setActiveSearchType] = useState<'auto' | 'hash' | 'domain' | 'ip'>('auto');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // New state for threat overview results
+  const [threatOverview, setThreatOverview] = useState<ThreatOverviewResult | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
+  
   const authenticatedFetch = useAuthenticatedFetch();
 
   const form = useForm<FormData>({
@@ -150,11 +171,42 @@ export default function AnalyzePage() {
     return () => clearInterval(interval);
   }, [authenticatedFetch]);
 
+  // Load most recent threat analysis results on mount
+  useEffect(() => {
+    const fetchLatestThreatResults = async () => {
+      try {
+        setOverviewLoading(true);
+        const response = await authenticatedFetch('/api/ioc/latest-analysis');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.analysis) {
+            setThreatOverview(data.analysis);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching latest threat analysis:', error);
+      } finally {
+        setOverviewLoading(false);
+      }
+    };
+
+    fetchLatestThreatResults();
+  }, [authenticatedFetch]);
+
   const onSubmit = async (data: FormData) => {
+    console.log('🔍 Analysis started with data:', data);
     setIsSubmitting(true);
+    setOverviewLoading(true);
+    
+    // Generate unique request ID for async safety
+    const requestId = crypto.randomUUID();
+    setCurrentRequestId(requestId);
+    console.log('📋 Generated request ID:', requestId);
+    
     try {
       // Validate IOCs based on selected search type
       const validation = validateIOCs(data.iocs, activeSearchType);
+      console.log('✅ Validation result:', validation);
       
       if (!validation.isValid) {
         const searchTypeLabel = searchTypes.find(type => type.id === activeSearchType)?.label || activeSearchType;
@@ -165,6 +217,7 @@ export default function AnalyzePage() {
           `\nValid IOCs: ${validation.validCount}/${validation.totalCount}`
         );
         setIsSubmitting(false);
+        setOverviewLoading(false);
         return;
       }
 
@@ -172,31 +225,67 @@ export default function AnalyzePage() {
         .split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0);
+      
+      console.log('🎯 IOC list to analyze:', iocList);
 
+      console.log('📤 Sending request to /api/ioc...');
       const response = await authenticatedFetch('/api/ioc', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           iocs: iocList,
           label: 'Threat Hunt Analysis',
-          searchType: activeSearchType
+          searchType: activeSearchType,
+          requestId // Include request ID for result tracking
         }),
       });
+
+      console.log('📥 Response received:', response.status, response.statusText);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
+      console.log('🎉 Analysis result:', result);
+      
+      console.log('🔍 Request ID check:', { currentRequestId, requestId, match: currentRequestId === requestId });
+      
+      // Create threat overview result from analysis (always do this)
+      const threatResult: ThreatOverviewResult = {
+        query: `${iocList.length} IOCs analyzed`,
+        timestamp: new Date(),
+        totalAnalyzed: result.analyzed || iocList.length,
+        malicious: result.threats?.malicious || 0,
+        suspicious: result.threats?.suspicious || 0,
+        clean: result.threats?.clean || 0,
+        threatBreakdown: result.threatBreakdown || [],
+        requestId
+      };
+      
+      console.log('📊 Threat overview result:', threatResult);
+      
+      // ALWAYS update the threat overview and clear loading
+      setThreatOverview(threatResult);
+      setOverviewLoading(false);  // Clear loading immediately
+      setIsSubmitting(false);     // Clear submitting immediately
+      console.log('✅ Threat overview state updated');
+      
       toast.success(`Analysis completed! ${result.created} new IOCs analyzed.`);
       
       // Clear the form after successful submission
       form.reset();
     } catch (error) {
-      console.error('Analysis failed:', error);
+      console.error('❌ Analysis failed:', error);
       toast.error('Analysis failed. Please try again.');
-    } finally {
+      // Clear loading states on error
       setIsSubmitting(false);
+      setOverviewLoading(false);
+      setCurrentRequestId(null);
+    } finally {
+      // Ensure loading states are always cleared
+      setCurrentRequestId(null);
+      console.log('🏁 Analysis process completed');
     }
   };
 
@@ -249,12 +338,25 @@ export default function AnalyzePage() {
     return null;
   };
 
-  // Prepare pie chart data from real data
-  const pieChartData = dashboardData?.threatTypes?.map(threat => ({
+  // Prepare pie chart data from threat overview results (analysis-specific) or dashboard data (global fallback)
+  const pieChartData = threatOverview?.threatBreakdown?.map(threat => ({
+    name: threat.type,
+    value: threat.count,
+    color: threat.color
+  })) || dashboardData?.threatTypes?.map(threat => ({
     name: threat.type,
     value: threat.count,
     color: threat.color
   })) || [];
+
+  // Debug pie chart data
+  console.log('📈 Pie Chart Data Debug:', {
+    threatOverview: threatOverview,
+    threatBreakdown: threatOverview?.threatBreakdown,
+    dashboardThreatTypes: dashboardData?.threatTypes,
+    finalPieChartData: pieChartData,
+    overviewLoading: overviewLoading
+  });
 
   // Prepare line chart data from real data
   const lineChartData = dashboardData?.weeklyTrends?.map(day => ({
@@ -483,32 +585,70 @@ export default function AnalyzePage() {
         {/* Threat Detection Overview */}
         <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm hover:bg-slate-800/70 hover:border-slate-600 transition-all duration-300 hover:shadow-lg hover:shadow-green-500/10">
           <CardHeader>
-            <CardTitle className="text-white flex items-center space-x-2">
-              <BarChart3 className="h-5 w-5 text-green-400" />
-              <span>Threat Detection Overview</span>
+            <CardTitle className="text-white flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <BarChart3 className="h-5 w-5 text-green-400" />
+                <span>Threat Detection Overview</span>
+              </div>
+              {overviewLoading && (
+                <div className="animate-spin h-4 w-4 border-2 border-green-400 border-t-transparent rounded-full" />
+              )}
             </CardTitle>
+            {threatOverview && (
+              <div className="text-sm text-slate-400 mt-1">
+                {threatOverview.query} • {new Date(threatOverview.timestamp).toLocaleString()}
+              </div>
+            )}
           </CardHeader>
           <CardContent>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieChartData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {pieChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+            {overviewLoading ? (
+              <div className="h-64 w-full flex items-center justify-center">
+                <div className="text-slate-400">Analyzing threats...</div>
+              </div>
+            ) : pieChartData.length > 0 ? (
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {pieChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-64 w-full flex items-center justify-center">
+                <div className="text-slate-400">No threat data available</div>
+              </div>
+            )}
+            
+            {/* Analysis Summary */}
+            {threatOverview && (
+              <div className="mt-4 grid grid-cols-3 gap-4 text-center">
+                <div className="bg-red-500/10 rounded-lg p-3">
+                  <div className="text-red-400 text-xl font-bold">{threatOverview.malicious}</div>
+                  <div className="text-slate-400 text-sm">Malicious</div>
+                </div>
+                <div className="bg-yellow-500/10 rounded-lg p-3">
+                  <div className="text-yellow-400 text-xl font-bold">{threatOverview.suspicious}</div>
+                  <div className="text-slate-400 text-sm">Suspicious</div>
+                </div>
+                <div className="bg-green-500/10 rounded-lg p-3">
+                  <div className="text-green-400 text-xl font-bold">{threatOverview.clean}</div>
+                  <div className="text-slate-400 text-sm">Clean</div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
