@@ -1,12 +1,34 @@
 ﻿'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { ThreatTypePieChart } from '@/components/dashboard/ThreatTypePieChart'
 import { ThreatTrendChart } from '@/components/dashboard/ThreatTrendChart'
-import { AlertTriangle, Shield, TrendingUp, Activity, Globe, Database } from 'lucide-react'
+import { AlertTriangle, Shield, TrendingUp, Activity, Globe, Database, Users, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
+
+// Trend indicator component
+const TrendIndicator: React.FC<{ trend: number }> = ({ trend }) => {
+  const isPositive = trend > 0;
+  const isNegative = trend < 0;
+  
+  if (Math.abs(trend) < 0.1) return null; // Don't show indicator for minimal changes
+  
+  return (
+    <div className={`flex items-center space-x-1 text-xs ${
+      isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-gray-400'
+    }`}>
+      {isPositive ? (
+        <ArrowUpRight className="h-3 w-3" />
+      ) : (
+        <ArrowDownRight className="h-3 w-3" />
+      )}
+      <span>{Math.abs(trend).toFixed(1)}%</span>
+    </div>
+  );
+};
 
 interface ThreatData {
   type: string
@@ -28,88 +50,115 @@ interface DashboardStats {
   cleanIOCs: number
   pendingIOCs: number
   detectionRate: number
+  activeAnalysts: number
+  trends: {
+    totalIOCs: number
+    threatsDetected: number
+    activeAnalysts: number
+  }
 }
 
-interface TopThreat {
-  ioc: string
-  type: string
-  detections: number
-  riskLevel: 'High' | 'Medium' | 'Low'
+interface ThreatVector {
+  name: string
+  count: number
+  severity: string
+  detectionRate: number
+  riskLevel: string
+  color: string
+  description: string
 }
 
 interface DashboardData {
   stats: DashboardStats
   weeklyTrends: WeeklyTrend[]
   threatTypes: ThreatData[]
-  topThreats: TopThreat[]
+  threatVectors: ThreatVector[]
 }
 
 export default function Dashboard() {
   const [realtimeData, setRealtimeData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { token, isAuthenticated, loading: authLoading } = useAuth()
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    let isMounted = true
+
+    const fetchData = async (authToken: string) => {
+      if (!isMounted) return
+
       try {
-        setLoading(true)
-        setError(null)
+        const response = await fetch('/api/dashboard', {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json',
+          },
+        })
         
-        const response = await fetch('/api/dashboard')
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`)
         }
         
         const data = await response.json()
-        setRealtimeData(data)
+        
+        if (isMounted) {
+          setRealtimeData(data)
+          setError(null)
+        }
       } catch (err) {
         console.error('Error fetching dashboard data:', err)
-        setError(err instanceof Error ? err.message : 'Failed to fetch dashboard data')
-        
-        // Fallback to mock data in case of error
-        setRealtimeData({
-          stats: {
-            totalIOCs: 1247,
-            maliciousIOCs: 892,
-            cleanIOCs: 298,
-            pendingIOCs: 57,
-            detectionRate: 71.5
-          },
-          weeklyTrends: [
-            { day: 'Monday', threats: 145, clean: 67, total: 212 },
-            { day: 'Tuesday', threats: 189, clean: 89, total: 278 },
-            { day: 'Wednesday', threats: 167, clean: 78, total: 245 },
-            { day: 'Thursday', threats: 201, clean: 64, total: 265 },
-            { day: 'Friday', threats: 156, clean: 92, total: 248 },
-            { day: 'Saturday', threats: 134, clean: 56, total: 190 },
-            { day: 'Sunday', threats: 178, clean: 71, total: 249 }
-          ],
-          threatTypes: [
-            { type: 'Malware', count: 456, percentage: 45.6, color: '#ef4444' },
-            { type: 'Phishing', count: 289, percentage: 28.9, color: '#f97316' },
-            { type: 'Botnet', count: 147, percentage: 14.7, color: '#eab308' },
-            { type: 'Other', count: 108, percentage: 10.8, color: '#6b7280' }
-          ],
-          topThreats: [
-            { ioc: '192.168.1.100', type: 'IP', detections: 45, riskLevel: 'High' },
-            { ioc: 'malware.exe', type: 'File Hash', detections: 38, riskLevel: 'High' },
-            { ioc: 'evil.com', type: 'Domain', detections: 32, riskLevel: 'Medium' },
-            { ioc: 'badactor@spam.com', type: 'Email', detections: 28, riskLevel: 'Medium' },
-            { ioc: '10.0.0.50', type: 'IP', detections: 23, riskLevel: 'Low' }
-          ]
-        })
-      } finally {
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'Failed to fetch dashboard data')
+        }
+      }
+    }
+
+    const setupDashboard = async () => {
+      if (!isMounted) return
+
+      setLoading(true)
+      setError(null)
+
+      if (!authLoading && isAuthenticated && token) {
+        try {
+          // Initial fetch
+          await fetchData(token)
+
+          // Setup interval - clear any existing one first
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current)
+          }
+
+          intervalRef.current = setInterval(() => {
+            if (isMounted && token) {
+              fetchData(token)
+            }
+          }, 30000) // 30 seconds
+        } catch (err) {
+          console.error('Failed to setup dashboard:', err)
+        }
+      }
+
+      if (isMounted) {
         setLoading(false)
       }
     }
 
-    fetchDashboardData()
-    
-    // Set up periodic refresh
-    const interval = setInterval(fetchDashboardData, 30000) // Refresh every 30 seconds
-    
-    return () => clearInterval(interval)
-  }, [])
+    // Only setup if authentication has loaded
+    if (!authLoading) {
+      setupDashboard()
+    }
+
+    // Cleanup function
+    return () => {
+      isMounted = false
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [authLoading, isAuthenticated, token])
 
   if (loading) {
     return (
@@ -143,11 +192,18 @@ export default function Dashboard() {
   }
 
   const getRiskBadgeColor = (risk: string) => {
-    switch (risk) {
-      case 'High': return 'bg-red-500/20 text-red-300 border-red-500/30'
-      case 'Medium': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
-      case 'Low': return 'bg-green-500/20 text-green-300 border-green-500/30'
-      default: return 'bg-gray-500/20 text-gray-300 border-gray-500/30'
+    switch (risk.toLowerCase()) {
+      case 'extreme': 
+      case 'critical': 
+        return 'bg-red-600/90 text-red-100 border-red-500/50 shadow-lg shadow-red-500/25'
+      case 'high': 
+        return 'bg-orange-500/90 text-orange-100 border-orange-400/50 shadow-lg shadow-orange-500/25'
+      case 'medium': 
+        return 'bg-yellow-500/90 text-yellow-100 border-yellow-400/50 shadow-lg shadow-yellow-500/25'
+      case 'low': 
+        return 'bg-green-500/90 text-green-100 border-green-400/50 shadow-lg shadow-green-500/25'
+      default: 
+        return 'bg-gray-500/90 text-gray-100 border-gray-400/50 shadow-lg shadow-gray-500/25'
     }
   }
 
@@ -184,7 +240,7 @@ export default function Dashboard() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {/* Total IOCs */}
+          {/* Total IOCs Analyzed */}
           <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-300">
@@ -193,8 +249,11 @@ export default function Dashboard() {
               <Database className="h-4 w-4 text-blue-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">
-                {realtimeData.stats?.totalIOCs?.toLocaleString() || '0'}
+              <div className="flex items-center justify-between">
+                <div className="text-2xl font-bold text-white">
+                  {realtimeData.stats?.totalIOCs?.toLocaleString() || '0'}
+                </div>
+                <TrendIndicator trend={realtimeData.stats?.trends?.totalIOCs || 0} />
               </div>
               <p className="text-xs text-gray-400 mt-1">
                 Cumulative analysis count
@@ -202,17 +261,20 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Malicious IOCs */}
+          {/* Threats Detected */}
           <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-300">
-                Malicious Threats
+                Threats Detected
               </CardTitle>
               <AlertTriangle className="h-4 w-4 text-red-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-400">
-                {realtimeData.stats?.maliciousIOCs?.toLocaleString() || '0'}
+              <div className="flex items-center justify-between">
+                <div className="text-2xl font-bold text-red-400">
+                  {realtimeData.stats?.maliciousIOCs?.toLocaleString() || '0'}
+                </div>
+                <TrendIndicator trend={realtimeData.stats?.trends?.threatsDetected || 0} />
               </div>
               <p className="text-xs text-gray-400 mt-1">
                 Active security risks
@@ -220,7 +282,28 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Clean IOCs */}
+          {/* Active Analysts */}
+          <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-300">
+                Active Analysts
+              </CardTitle>
+              <Users className="h-4 w-4 text-purple-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="text-2xl font-bold text-purple-400">
+                  {realtimeData.stats?.activeAnalysts?.toLocaleString() || '0'}
+                </div>
+                <TrendIndicator trend={realtimeData.stats?.trends?.activeAnalysts || 0} />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Currently online
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Clean Resources */}
           <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-300">
@@ -229,29 +312,14 @@ export default function Dashboard() {
               <Shield className="h-4 w-4 text-green-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-400">
-                {realtimeData.stats?.cleanIOCs?.toLocaleString() || '0'}
+              <div className="flex items-center justify-between">
+                <div className="text-2xl font-bold text-green-400">
+                  {realtimeData.stats?.cleanIOCs?.toLocaleString() || '0'}
+                </div>
+                {/* No trend for clean resources as it's less critical */}
               </div>
               <p className="text-xs text-gray-400 mt-1">
                 Verified safe resources
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Detection Rate */}
-          <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-300">
-                Detection Rate
-              </CardTitle>
-              <TrendingUp className="h-4 w-4 text-blue-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-400">
-                {realtimeData.stats?.detectionRate?.toFixed(1) || '0.0'}%
-              </div>
-              <p className="text-xs text-gray-400 mt-1">
-                Analysis accuracy
               </p>
             </CardContent>
           </Card>
@@ -292,49 +360,78 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Top Threats Table */}
+        {/* Top Threats Cards */}
         <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-red-400" />
-              Top Security Threats
+              Top Threats (Last 24h)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-600">
-                    <th className="text-left text-gray-300 pb-3">IOC</th>
-                    <th className="text-left text-gray-300 pb-3">Type</th>
-                    <th className="text-left text-gray-300 pb-3">Detections</th>
-                    <th className="text-left text-gray-300 pb-3">Risk Level</th>
-                  </tr>
-                </thead>
-                <tbody className="space-y-2">
-                  {(realtimeData.topThreats || []).map((threat, index) => (
-                    <tr key={index} className="border-b border-slate-700/50">
-                      <td className="py-3">
-                        <code className="text-blue-300 bg-slate-700/50 px-2 py-1 rounded text-xs">
-                          {threat.ioc}
-                        </code>
-                      </td>
-                      <td className="py-3">
-                        <span className="text-gray-300">{threat.type}</span>
-                      </td>
-                      <td className="py-3">
-                        <span className="text-white font-medium">{threat.detections}</span>
-                      </td>
-                      <td className="py-3">
-                        <Badge className={getRiskBadgeColor(threat.riskLevel)}>
-                          {threat.riskLevel}
-                        </Badge>
-                      </td>
-                    </tr>
+            <div className="max-h-96 overflow-y-auto space-y-3" style={{ scrollbarWidth: 'thin', scrollbarColor: '#8b5cf6 #374151' }}>
+              {(realtimeData.threatVectors && realtimeData.threatVectors.length > 0) ? (
+                <>
+                  {realtimeData.threatVectors.slice(0, 10).map((threat, index) => (
+                    <div key={index} className="bg-slate-700/30 rounded-lg p-4 border border-slate-600/50 hover:bg-slate-600/30 transition-all duration-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="flex-shrink-0">
+                            <AlertTriangle className={`h-5 w-5 ${threat.count > 0 ? 'text-red-400' : 'text-gray-500'}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium text-base mb-1">
+                              {threat.name}.Generic.{threat.severity?.charAt(0).toUpperCase() + threat.severity?.slice(1) || 'Unknown'}
+                            </div>
+                            <div className="text-gray-400 text-sm">
+                              {threat.count > 0 ? `${threat.count} detections` : 'No samples analyzed yet'}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              {threat.description}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                          <div className="w-24 bg-slate-600 rounded-full h-1.5">
+                            <div 
+                              className={`${threat.count > 0 ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-gray-600'} h-1.5 rounded-full transition-all duration-300`}
+                              style={{ width: `${threat.count > 0 ? Math.min(100, threat.detectionRate) : 0}%` }}
+                            ></div>
+                          </div>
+                          <Badge 
+                            className={`${threat.count > 0 ? getRiskBadgeColor(threat.riskLevel) : 'bg-gray-600/90 text-gray-300 border-gray-500/50'} px-3 py-1 text-sm font-medium`}
+                          >
+                            {threat.count > 0 ? threat.riskLevel : 'N/A'}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                  {realtimeData.threatVectors.every(threat => threat.count === 0) && (
+                    <div className="text-center py-8 bg-slate-700/20 rounded-lg border border-slate-600/30">
+                      <div className="text-gray-400">
+                        <AlertTriangle className="h-8 w-8 mx-auto mb-3 opacity-50" />
+                        <p className="text-base font-medium mb-2">Ready for Threat Analysis</p>
+                        <p className="text-sm">Visit the <a href="/analyze" className="text-blue-400 hover:text-blue-300 underline">Analysis Page</a> to submit IOCs and see threat categorization here.</p>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="text-gray-400">
+                    <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg">No threats detected in the last 24 hours</p>
+                    <p className="text-sm mt-2">Your system appears secure</p>
+                  </div>
+                </div>
+              )}
             </div>
+            {realtimeData.threatVectors && realtimeData.threatVectors.length > 5 && (
+              <div className="mt-4 text-center text-xs text-gray-400 border-t border-slate-600/30 pt-3">
+                Showing {realtimeData.threatVectors.length} threat categories • Scroll to see all
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

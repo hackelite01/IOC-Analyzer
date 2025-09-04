@@ -1,10 +1,24 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import { IOC } from '@/lib/models/IOC';
+import { verifyAuthToken, logActivity } from '@/lib/middleware';
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     await connectDB();
+
+    // Verify authentication
+    const authResult = await verifyAuthToken(request)
+    if (!authResult.success || !authResult.user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
+    const user = authResult.user
+    // Log the dashboard access
+    await logActivity(user.userId, 'dashboard_access', request)
     
     // Get basic statistics
     const totalIOCs = await IOC.countDocuments();
@@ -15,6 +29,37 @@ export async function GET(): Promise<NextResponse> {
       'vt.normalized.verdict': 'harmless'
     });
     const activeAnalysis = 0; // This would be from a queue system in production
+    const activeAnalysts = 3; // Mock data - in production this would come from user sessions
+
+    // Get yesterday's stats for comparison
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const yesterdayStats = {
+      totalIOCs: await IOC.countDocuments({ 
+        fetchedAt: { $lt: today } 
+      }),
+      threatsDetected: await IOC.countDocuments({ 
+        'vt.normalized.verdict': { $in: ['malicious', 'suspicious'] },
+        fetchedAt: { $lt: today }
+      })
+    };
+
+    // Calculate trends (percentage change from yesterday)
+    const totalIOCsTrend = yesterdayStats.totalIOCs > 0 
+      ? ((totalIOCs - yesterdayStats.totalIOCs) / yesterdayStats.totalIOCs) * 100 
+      : 0;
+    
+    const threatsDetectedTrend = yesterdayStats.threatsDetected > 0 
+      ? ((threatsDetected - yesterdayStats.threatsDetected) / yesterdayStats.threatsDetected) * 100 
+      : 0;
+
+    // Mock trend for active analysts (in production, track login sessions)
+    const activeAnalystsTrend = 12.5; // +12.5% (example)
 
     // Get weekly trend data (last 7 days)
     const weekAgo = new Date();
@@ -368,33 +413,15 @@ export async function GET(): Promise<NextResponse> {
     ];
 
     if (hasRealData) {
-      // Filter to show categories with actual data
-      const realDataCategories = formattedThreatVectors.filter(threat => threat.count > 0);
-      
-      // If we have fewer than 5 real categories, pad with top categories using fallback data
-      if (realDataCategories.length < 5) {
-        const top5 = formattedThreatVectors.slice(0, 5);
-        formattedThreatVectors = top5.map(threat => ({
-          ...threat,
-          count: threat.count > 0 ? threat.count : Math.max(1, Math.floor(threatsDetected * 
-            (threat.name === 'Malware' ? 0.24 :
-             threat.name === 'Trojan' ? 0.18 :
-             threat.name === 'Ransomware' ? 0.16 :
-             threat.name === 'Phishing' ? 0.14 : 0.11)))
-        }));
-      } else {
-        // We have 5+ real categories, show all of them
-        formattedThreatVectors = realDataCategories;
-      }
+      // Filter to show only categories with actual real data, but always show at least top 5
+      const categoriesWithData = formattedThreatVectors.filter(threat => threat.count > 0);
+      formattedThreatVectors = categoriesWithData.length >= 5 ? categoriesWithData : formattedThreatVectors.slice(0, 5);
     } else {
-      // No real data, show top 5 categories with proportional fallback
+      // No real threat data yet - show top 5 categories with sample data to guide users
       formattedThreatVectors = formattedThreatVectors.slice(0, 5).map(threat => ({
         ...threat,
-        count: Math.max(1, Math.floor(threatsDetected * 
-          (threat.name === 'Malware' ? 0.24 :
-           threat.name === 'Trojan' ? 0.18 :
-           threat.name === 'Ransomware' ? 0.16 :
-           threat.name === 'Phishing' ? 0.14 : 0.11)))
+        count: 0, // Show 0 count but keep the structure
+        description: `${threat.description} - No samples analyzed yet`
       }));
     }
 
@@ -438,7 +465,14 @@ export async function GET(): Promise<NextResponse> {
         maliciousIOCs: threatsDetected,
         cleanIOCs: cleanFiles,
         pendingIOCs: totalIOCs - (threatsDetected + cleanFiles),
-        detectionRate
+        detectionRate,
+        activeAnalysts,
+        // Add trends for dashboard cards
+        trends: {
+          totalIOCs: totalIOCsTrend,
+          threatsDetected: threatsDetectedTrend,
+          activeAnalysts: activeAnalystsTrend
+        }
       },
       weeklyTrends: formattedWeeklyTrends,
       threatTypes: formattedThreatTypesForChart,

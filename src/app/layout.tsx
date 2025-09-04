@@ -1,15 +1,16 @@
-﻿'use client';
+﻿'use client'
 
-import { useState } from 'react'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
+import { AuthProvider } from '@/contexts/AuthContext'
+import ProtectedRoute from '@/components/auth/ProtectedRoute'
 
 const inter = Inter({ subsets: ['latin'] })
 
-function RootLayoutClient({
+function AuthenticatedLayout({
   children,
 }: {
   children: React.ReactNode
@@ -24,6 +25,22 @@ function RootLayoutClient({
         </main>
       </div>
     </div>
+  )
+}
+
+function RootLayoutClient({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <AuthProvider>
+      <ProtectedRoute>
+        <AuthenticatedLayout>
+          {children}
+        </AuthenticatedLayout>
+      </ProtectedRoute>
+    </AuthProvider>
   )
 }
 

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { useAuthenticatedFetch } from '@/contexts/AuthContext';
 
 const formSchema = z.object({
   iocs: z.string().min(1, 'At least one IOC is required'),
@@ -118,6 +119,7 @@ export default function AnalyzePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const authenticatedFetch = useAuthenticatedFetch();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -130,7 +132,7 @@ export default function AnalyzePage() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const response = await fetch('/api/dashboard');
+        const response = await authenticatedFetch('/api/dashboard');
         if (response.ok) {
           const data = await response.json();
           setDashboardData(data);
@@ -146,7 +148,7 @@ export default function AnalyzePage() {
     // Refresh data every 30 seconds
     const interval = setInterval(fetchDashboardData, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [authenticatedFetch]);
 
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
@@ -171,7 +173,7 @@ export default function AnalyzePage() {
         .map(line => line.trim())
         .filter(line => line.length > 0);
 
-      const response = await fetch('/api/ioc', {
+      const response = await authenticatedFetch('/api/ioc', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -215,6 +217,37 @@ export default function AnalyzePage() {
     { id: 'domain', label: 'Domain', icon: Globe },
     { id: 'ip', label: 'IP', icon: Network },
   ];
+
+  // Custom tooltip component for consistent styling
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-slate-900 border border-slate-600 rounded-lg p-3 shadow-lg">
+          <p className="text-white font-medium">
+            {`${payload[0].name}: ${payload[0].value}`}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Custom tooltip component for line chart
+  const CustomLineTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-slate-900 border border-slate-600 rounded-lg p-3 shadow-lg">
+          <p className="text-white font-medium mb-2">{label}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} className="text-white" style={{ color: entry.color }}>
+              {`${entry.dataKey}: ${entry.value}`}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
 
   // Prepare pie chart data from real data
   const pieChartData = dashboardData?.threatTypes?.map(threat => ({
@@ -472,16 +505,7 @@ export default function AnalyzePage() {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                      border: '1px solid rgb(99, 102, 241)',
-                      borderRadius: '8px',
-                      color: 'white',
-                      fontWeight: '500',
-                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)'
-                    }}
-                  />
+                  <Tooltip content={<CustomTooltip />} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -511,14 +535,7 @@ export default function AnalyzePage() {
                     tickLine={false}
                     tick={{ fill: 'rgb(156, 163, 175)', fontSize: 12 }}
                   />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: 'rgb(30, 41, 59)',
-                      border: '1px solid rgb(71, 85, 105)',
-                      borderRadius: '8px',
-                      color: 'white'
-                    }}
-                  />
+                  <Tooltip content={<CustomLineTooltip />} />
                   <Line 
                     type="monotone" 
                     dataKey="threats" 

@@ -4,11 +4,24 @@ import { IOC } from '@/lib/models/IOC';
 import { detectIOCType, normalizeIOC } from '@/lib/detect';
 import { VTNormalized } from '@/lib/validators';
 import { vtClient } from '@/lib/vt';
+import { authenticateAndLog } from '@/lib/middleware';
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     await connectDB();
-    return NextResponse.json({ message: 'IOC API endpoint working' });
+
+    // Authenticate user
+    const { user, error } = await authenticateAndLog(request, 'GET_IOC_STATUS');
+    
+    if (error) {
+      return error;
+    }
+
+    return NextResponse.json({ 
+      message: 'IOC API endpoint working',
+      authenticated: !!user,
+      user: user ? { id: user.userId, role: user.role } : null 
+    });
   } catch (error) {
     console.error('IOC GET error:', error);
     return NextResponse.json(
@@ -33,6 +46,21 @@ interface SubmissionResult {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     await connectDB();
+
+    // Authenticate user
+    const { user, error } = await authenticateAndLog(request, 'SUBMIT_IOC_ANALYSIS');
+    
+    if (error) {
+      return error;
+    }
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
     const body: IOCSubmission = await request.json();
     
     if (!body.iocs || !Array.isArray(body.iocs) || body.iocs.length === 0) {
